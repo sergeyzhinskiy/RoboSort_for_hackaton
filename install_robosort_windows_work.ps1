@@ -1,26 +1,26 @@
 <#
 .SYNOPSIS
-    ��������� RoboSort �� Windows 10.
-    ���������� �� ����� ��������������.
+    Установка RoboSort на Windows 10.
+    Запускайте от имени администратора.
 .DESCRIPTION
-    - ��������� ������� Python 3.9+, ���� ��� � ��������� � �������������.
-    - ������ ����������� ���������.
-    - ������������� �����������.
-    - ������ ���������������� ����.
-    - ��������� ������ � ����������� ��� �����������.
+    - Проверяет наличие Python 3.9+, если нет — скачивает и устанавливает.
+    - Создаёт виртуальное окружение.
+    - Устанавливает зависимости.
+    - Создаёт конфигурационный файл.
+    - Добавляет задачу в планировщик для автозапуска.
 #>
 
 #Requires -RunAsAdministrator
 
 # -----------------------------------------------------------------------------
-# 1. ��������� Python
+# 1. Настройки Python
 # -----------------------------------------------------------------------------
 $PythonVersion = "3.12.1"
 $PythonInstallerUrl = "https://www.python.org/ftp/python/$PythonVersion/python-$PythonVersion-amd64.exe"
 $PythonInstaller = "$env:TEMP\python-installer.exe"
 
 # -----------------------------------------------------------------------------
-# 2. �������� ������� Python 3.9+
+# 2. Проверка наличия Python 3.9+
 # -----------------------------------------------------------------------------
 function Test-PythonVersion {
     try {
@@ -35,35 +35,35 @@ function Test-PythonVersion {
 }
 
 if (-not (Test-PythonVersion)) {
-    Write-Host "Python 3.9+ �� ������. ����� ��������� �������������� ���������." -ForegroundColor Yellow
-    Write-Host "���������� ����������� Python $PythonVersion ..." -ForegroundColor Cyan
+    Write-Host "Python 3.9+ не найден. Будет выполнена автоматическая установка." -ForegroundColor Yellow
+    Write-Host "Скачивание установщика Python $PythonVersion ..." -ForegroundColor Cyan
     try {
         Invoke-WebRequest -Uri $PythonInstallerUrl -OutFile $PythonInstaller
     } catch {
-        Write-Error "�� ������� ������� Python: $_"
+        Write-Error "Не удалось скачать Python: $_"
         exit 1
     }
 
-    Write-Host "������ ��������� Python (����, � ����������� � PATH)..." -ForegroundColor Cyan
+    Write-Host "Запуск установки Python (тихо, с добавлением в PATH)..." -ForegroundColor Cyan
     Start-Process -Wait -FilePath $PythonInstaller -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 Include_pip=1 Include_tcltk=0"
     Remove-Item $PythonInstaller -Force
 
-    # ��������� ���������� PATH ��� ������� ������
-    Write-Host "���������� ���������� PATH..." -ForegroundColor Cyan
+    # Обновляем переменную PATH для текущей сессии
+    Write-Host "Обновление переменной PATH..." -ForegroundColor Cyan
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
-    # ���������, ��� ������ python ��������
+    # Проверяем, что теперь python доступен
     if (-not (Test-PythonVersion)) {
-        Write-Error "Python ����������, �� �� ��������� � PATH. ������������� ������ ����� ������������."
+        Write-Error "Python установлен, но не обнаружен в PATH. Перезапустите скрипт после перезагрузки."
         exit 1
     }
-    Write-Host "Python ������� ����������!" -ForegroundColor Green
+    Write-Host "Python успешно установлен!" -ForegroundColor Green
 } else {
-    Write-Host "Python ��� ����������." -ForegroundColor Green
+    Write-Host "Python уже установлен." -ForegroundColor Green
 }
 
 # -----------------------------------------------------------------------------
-# 3. ����������� �����
+# 3. Определение путей
 # -----------------------------------------------------------------------------
 $InstallDir = "C:\Program Files\RoboSort"
 $VenvDir = "$InstallDir\venv"
@@ -74,47 +74,47 @@ $PythonExe = "$VenvDir\Scripts\python.exe"
 $PipExe = "$VenvDir\Scripts\pip.exe"
 
 # -----------------------------------------------------------------------------
-# 4. �������� ����������
+# 4. Создание директорий
 # -----------------------------------------------------------------------------
-Write-Host "�������� ����������..." -ForegroundColor Green
+Write-Host "Создание директорий..." -ForegroundColor Green
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 New-Item -ItemType Directory -Force -Path $ModelDir | Out-Null
 
-# ����������� ������ ������� (��������������, ��� ������ ����������� �� ����� �����������)
+# Копирование файлов проекта (предполагается, что скрипт запускается из корня репозитория)
 $SourceDir = (Get-Location).Path
-Write-Host "����������� ��������� ���� �� $SourceDir � $InstallDir ..." -ForegroundColor Green
+Write-Host "Копирование исходного кода из $SourceDir в $InstallDir ..." -ForegroundColor Green
 Copy-Item -Recurse -Force "$SourceDir\src" "$InstallDir\"
 Copy-Item -Force "$SourceDir\main.py" "$InstallDir\"
 Copy-Item -Force "$SourceDir\__init__.py" "$InstallDir\" 2>$null
 Copy-Item -Recurse -Force "$SourceDir\src" "$InstallDir\"
 Copy-Item -Force "$SourceDir\main.py" "$InstallDir\"
 Copy-Item -Force "$SourceDir\__init__.py" "$InstallDir\" 2>$null
-Copy-Item -Force "$SourceDir\scripts\calibrate.py" "$InstallDir\"  # <-- ���������
-Copy-Item -Recurse -Force "$SourceDir\tests" "$InstallDir\" 2>$null  # ���� ����
+Copy-Item -Force "$SourceDir\scripts\calibrate.py" "$InstallDir\"  # <-- добавлено
+Copy-Item -Recurse -Force "$SourceDir\tests" "$InstallDir\" 2>$null  # если есть
 Copy-Item -Force "$SourceDir\README.md" "$InstallDir\" 2>$null
 Copy-Item -Force "$SourceDir\REPORT.md" "$InstallDir\" 2>$null
-# �������� cad_models.yaml, ���� ����
+# Копируем cad_models.yaml, если есть
 if (Test-Path "$SourceDir\config\cad_models.yaml") {
     Copy-Item -Force "$SourceDir\config\cad_models.yaml" "$ConfigDir\"
 }
 
 
 # -----------------------------------------------------------------------------
-# 5. �������� ������������ ���������
+# 5. Создание виртуального окружения
 # -----------------------------------------------------------------------------
-Write-Host "�������� ������������ ���������..." -ForegroundColor Green
+Write-Host "Создание виртуального окружения..." -ForegroundColor Green
 python -m venv $VenvDir
 if (-not (Test-Path $PythonExe)) {
-    Write-Error "�� ������� ������� ����������� ���������."
+    Write-Error "Не удалось создать виртуальное окружение."
     exit 1
 }
 
 # -----------------------------------------------------------------------------
-# 6. ��������� ������������
+# 6. Установка зависимостей
 # -----------------------------------------------------------------------------
-Write-Host "���������� pip � ��������� ������������..." -ForegroundColor Green
+Write-Host "Обновление pip и установка зависимостей..." -ForegroundColor Green
 & $PipExe install --upgrade pip setuptools wheel
 
 $Requirements = @"
@@ -145,34 +145,34 @@ $Requirements | Out-File -FilePath $ReqFile -Encoding utf8
 
 & $PipExe install -r $ReqFile
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "������ ��������� ������������."
+    Write-Error "Ошибка установки зависимостей."
     exit 1
 }
 
 # -----------------------------------------------------------------------------
-# 7. �������� ����������������� ����� (������������)
+# 7. Создание конфигурационного файла (интерактивно)
 # -----------------------------------------------------------------------------
-Write-Host "��������� ������������..." -ForegroundColor Green
+Write-Host "Настройка конфигурации..." -ForegroundColor Green
 $ConfigFile = "$ConfigDir\config.yaml"
 
 if (-not (Test-Path $ConfigFile)) {
-    Write-Host "�������� ������ ����������������� �����." -ForegroundColor Yellow
+    Write-Host "Создание нового конфигурационного файла." -ForegroundColor Yellow
     $defaultCam = 0
     $defaultPort = "COM3"
     $defaultBaud = 115200
     $defaultModel = "models/yolov8n.pt"
     $defaultPixelsPerMm = 0.5
 
-    Write-Host "������� ��������� (�������� ������ ��� �������� �� ���������):"
-    $camIndex = Read-Host "������ ������ [0]"
+    Write-Host "Введите параметры (оставьте пустым для значения по умолчанию):"
+    $camIndex = Read-Host "Индекс камеры [0]"
     if ($camIndex -eq "") { $camIndex = $defaultCam }
-    $serialPort = Read-Host "���� Arduino [COM3]"
+    $serialPort = Read-Host "Порт Arduino [COM3]"
     if ($serialPort -eq "") { $serialPort = $defaultPort }
-    $baudRate = Read-Host "�������� ����� [115200]"
+    $baudRate = Read-Host "Скорость порта [115200]"
     if ($baudRate -eq "") { $baudRate = $defaultBaud }
-    $modelPath = Read-Host "���� � ������ YOLO [models/yolov8n.pt]"
+    $modelPath = Read-Host "Путь к модели YOLO [models/yolov8n.pt]"
     if ($modelPath -eq "") { $modelPath = $defaultModel }
-    $pixelsPerMm = Read-Host "������������� ����������� (�������� �� ��) [0.5]"
+    $pixelsPerMm = Read-Host "Калибровочный коэффициент (пикселей на мм) [0.5]"
     if ($pixelsPerMm -eq "") { $pixelsPerMm = $defaultPixelsPerMm }
 
     $ConfigContent = @"
@@ -197,7 +197,7 @@ classification:
   min_dimensions: [10, 10, 2]
   max_dimensions: [450, 320, 320]
   circle_ratio_threshold: 0.8
-  confidence_low_threshold: 0.6   # <-- ���������
+  confidence_low_threshold: 0.6   # <-- добавлено
 
 system:
   conveyor_speed: 1.0
@@ -209,13 +209,13 @@ system:
 pixels_per_mm: $pixelsPerMm
 "@
     $ConfigContent | Out-File -FilePath $ConfigFile -Encoding utf8
-    Write-Host "������������ ��������� � $ConfigFile" -ForegroundColor Green
+    Write-Host "Конфигурация сохранена в $ConfigFile" -ForegroundColor Green
 } else {
-    Write-Host "���������������� ���� ��� ����������: $ConfigFile" -ForegroundColor Yellow
+    Write-Host "Конфигурационный файл уже существует: $ConfigFile" -ForegroundColor Yellow
 }
 
 # -----------------------------------------------------------------------------
-# 8. �������� bat-����� ��� �������
+# 8. Создание bat-файла для запуска
 # -----------------------------------------------------------------------------
 $BatFile = "$InstallDir\run_robosort.bat"
 $BatContent = @"
@@ -226,47 +226,47 @@ set PYTHONPATH=$InstallDir
 pause
 "@
 $BatContent | Out-File -FilePath $BatFile -Encoding ascii
-Write-Host "������ bat-���� ��� �������: $BatFile" -ForegroundColor Green
+Write-Host "Создан bat-файл для запуска: $BatFile" -ForegroundColor Green
 
 # -----------------------------------------------------------------------------
-# 9. ���������� ������ � ����������� Windows (���������� ��� �����)
+# 9. Добавление задачи в планировщик Windows (автозапуск при входе)
 # -----------------------------------------------------------------------------
 $TaskName = "RoboSort"
-$TaskDescription = "�������������� ������ ������� ���������� RoboSort"
+$TaskDescription = "Автоматический запуск системы сортировки RoboSort"
 $Trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $Action = New-ScheduledTaskAction -Execute "$PythonExe" -Argument "main.py --config $ConfigFile" -WorkingDirectory $InstallDir
 $Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 
-$Ask = Read-Host "�������� ������ � ����������� ��� ����������� ��� �����? (y/n) [y]"
+$Ask = Read-Host "Добавить задачу в планировщик для автозапуска при входе? (y/n) [y]"
 if ($Ask -eq "" -or $Ask -eq "y") {
     try {
         Register-ScheduledTask -TaskName $TaskName -Description $TaskDescription -Trigger $Trigger -Action $Action -Principal $Principal -Settings $Settings -Force
-        Write-Host "������ '$TaskName' ������� �������." -ForegroundColor Green
+        Write-Host "Задача '$TaskName' успешно создана." -ForegroundColor Green
     } catch {
-        Write-Warning "�� ������� ������� ������: $_"
+        Write-Warning "Не удалось создать задачу: $_"
     }
 } else {
-    Write-Host "������ �� �������." -ForegroundColor Yellow
+    Write-Host "Задача не создана." -ForegroundColor Yellow
 }
 
 # -----------------------------------------------------------------------------
-# 10. ����������
+# 10. Завершение
 # -----------------------------------------------------------------------------
-Write-Host "��������� ���������!" -ForegroundColor Green
+Write-Host "Установка завершена!" -ForegroundColor Green
 Write-Host ""
-Write-Host "��� ������� ������� �����������: $BatFile"
-Write-Host "��� ���������: $PythonExe main.py --config $ConfigFile"
-Write-Host "���� ����� ����������� �: $LogDir"
+Write-Host "Для запуска вручную используйте: $BatFile"
+Write-Host "Или выполните: $PythonExe main.py --config $ConfigFile"
+Write-Host "Логи будут сохраняться в: $LogDir"
 Write-Host ""
-Write-Host "�� �������� ��������� ������ YOLO (���� �����������) � ��� ������ ������� ��� ��������� �������������."
-Write-Host "��� ������������� �������������� ������: $ConfigFile"
+Write-Host "Не забудьте загрузить модель YOLO (если отсутствует) – при первом запуске она скачается автоматически."
+Write-Host "При необходимости отредактируйте конфиг: $ConfigFile"
 
 #-------------------------------------------------------------------------------
-# 11. �������� ������ �� ������� ����� (�������� � �����)
+# 11. Создание ярлыка на рабочем столе (добавить в конец)
 $WshShell = New-Object -comObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut("$env:USERPROFILE\Desktop\RoboSort.lnk")
 $Shortcut.TargetPath = "$BatFile"
 $Shortcut.WorkingDirectory = "$InstallDir"
 $Shortcut.Save()
-Write-Host "����� ������ �� ������� �����." -ForegroundColor Green
+Write-Host "Ярлык создан на рабочем столе." -ForegroundColor Green
