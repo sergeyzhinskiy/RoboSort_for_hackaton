@@ -1,0 +1,33 @@
+﻿camera:
+  camera_index: 0
+  width: 640
+  height: 480
+
+serial:
+  port: "COM3"
+  baud_rate: 115200
+  timeout: 2.0
+  retry_attempts: 3
+  retry_delay: 0.5
+
+model:
+  yolo_model_path: "models/yolov8n.pt"
+  confidence_threshold: 0.5
+  device: auto
+
+classification:
+  min_dimensions: [10, 10, 2]
+  max_dimensions: [450, 320, 320]
+  circle_ratio_threshold: 0.8
+  confidence_low_threshold: 0.6
+  tolerance_mm: 5.0            # допустимая погрешность при проверке габаритов (мм)
+
+system:
+  conveyor_speed: 1.0
+  cycle_timeout: 2.0
+  log_level: INFO
+  metrics_interval: 5.0
+  memory_log_interval: 100
+
+pixels_per_mm: 0.5
+log_results_dir: "logs/results"   # папка для CSV-логов

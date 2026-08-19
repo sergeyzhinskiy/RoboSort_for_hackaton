@@ -1,0 +1,27 @@
+# Эталонные параметры для CAD-моделей
+# Ключи должны соответствовать class_id из YOLO (например, class_1, class_2, ...)
+
+class_1:
+  name: "Деталь А (корпус малый)"
+  nominal_dims: [120.0, 80.0, 30.0]   # ширина, высота, глубина (мм)
+  tolerance: 0.05                      # ±5%
+  circle_ratio: 0.9                   # ожидаемое отношение сторон (чем ближе к 1, тем круглее)
+
+class_2:
+  name: "Деталь Б (корпус большой)"
+  nominal_dims: [200.0, 150.0, 50.0]
+  tolerance: 0.03                      # ±3%
+  circle_ratio: 0.4
+
+class_3:
+  name: "Цилиндр"
+  nominal_dims: [60.0, 60.0, 100.0]
+  tolerance: 0.05
+  circle_ratio: 1.0
+
+# Можно добавить класс 0, если он есть в модели
+# class_0:
+#   name: "Unknown"
+#   nominal_dims: [100, 100, 100]
+#   tolerance: 0.1
+#   circle_ratio: 0.5

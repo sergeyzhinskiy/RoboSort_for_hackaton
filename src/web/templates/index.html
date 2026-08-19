@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboSort - Мониторинг</title>
+    <!-- Chart.js для графиков -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
+        .container { max-width: 1400px; margin: auto; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
+        .row { display: flex; flex-wrap: wrap; gap: 20px; }
+        .col { flex: 1; min-width: 300px; }
+        h1, h2 { color: #333; }
+        .status-badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
+        .status-running { background: #28a745; color: white; }
+        .status-stopped { background: #dc3545; color: white; }
+        .status-unknown { background: #ffc107; color: black; }
+        #frame-img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+        .metric { background: #e9ecef; padding: 10px; border-radius: 4px; text-align: center; }
+        .metric-value { font-size: 1.5em; font-weight: bold; color: #007bff; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input[type="file"], input[type="number"], input[type="text"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #0056b3; }
+        .btn-danger { background: #dc3545; }
+        .btn-danger:hover { background: #c82333; }
+        .table-container { max-height: 400px; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; position: sticky; top: 0; z-index: 1; }
+        .chart-container { max-width: 300px; margin: auto; }
+        .stl-result { background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 10px; }
+        .stl-result pre { margin: 0; white-space: pre-wrap; }
+        .control-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>RoboSort - Управление системой</h1>
+
+    <!-- Панель управления -->
+    <div class="card">
+        <div class="row">
+            <div class="col">
+                <h2>Статус</h2>
+                <div id="status-badge" class="status-badge status-unknown">Загрузка...</div>
+                <div class="control-buttons" style="margin-top: 10px;">
+                    <button id="btn-start" onclick="startPipeline()">▶ Запустить</button>
+                    <button id="btn-stop" class="btn-danger" onclick="stopPipeline()">⏹ Остановить</button>
+                </div>
+                <div id="metrics" class="metrics-grid" style="margin-top: 15px;">
+                    <div class="metric">FPS <div id="fps" class="metric-value">-</div></div>
+                    <div class="metric">Обработка <div id="processing" class="metric-value">-</div></div>
+                    <div class="metric">Задержка <div id="latency" class="metric-value">-</div></div>
+                    <div class="metric">Кадров <div id="total_frames" class="metric-value">-</div></div>
+                </div>
+            </div>
+            <div class="col">
+                <h2>Параметры классификации</h2>
+                <div id="config-params">
+                    <p>Загрузка...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Видеопоток и график -->
+    <div class="card">
+        <div class="row">
+            <div class="col">
+                <h2>Видеопоток</h2>
+                <img id="frame-img" src="/frame" alt="Последний кадр">
+                <button onclick="refreshFrame()">Обновить</button>
+            </div>
+            <div class="col">
+                <h2>Распределение категорий</h2>
+                <div class="chart-container">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- История результатов -->
+    <div class="card">
+        <h2>История последних классификаций</h2>
+        <div class="table-container">
+            <table id="history-table">
+                <thead>
+                    <tr>
+                        <th>Время</th>
+                        <th>Категория</th>
+                        <th>Уверенность</th>
+                        <th>Ширина (мм)</th>
+                        <th>Высота (мм)</th>
+                        <th>Смещение (мм)</th>
+                        <th>Задержка (с)</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body">
+                    <tr><td colspan="8">Нет данных</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <button onclick="downloadLogs()">📥 Скачать CSV-лог</button>
+    </div>
+
+    <!-- Загрузка STL -->
+    <div class="card">
+        <h2>Загрузка STL для проверки классификации</h2>
+        <form id="upload-form" enctype="multipart/form-data">
+            <div class="form-group">
+                <label>STL-файл</label>
+                <input type="file" name="file" accept=".stl" required>
+            </div>
+            <button type="submit">Загрузить и классифицировать</button>
+        </form>
+        <div id="stl-result" class="stl-result" style="display:none;">
+            <h3>Результат классификации</h3>
+            <pre id="stl-output"></pre>
+        </div>
+    </div>
+</div>
+
+<script>
+// Глобальные переменные
+let categoryChart = null;
+
+// Обновление статуса и метрик
+async function updateStatus() {
+    try {
+        const res = await fetch('/status');
+        const data = await res.json();
+        const badge = document.getElementById('status-badge');
+        if (data.status === 'running') {
+            badge.textContent = '🟢 Работает';
+            badge.className = 'status-badge status-running';
+        } else if (data.status === 'stopped') {
+            badge.textContent = '🔴 Остановлен';
+            badge.className = 'status-badge status-stopped';
+        } else {
+            badge.textContent = '❓ Не инициализирован';
+            badge.className = 'status-badge status-unknown';
+        }
+    } catch (e) {}
+}
+
+async function updateMetrics() {
+    try {
+        const res = await fetch('/metrics');
+        const data = await res.json();
+        document.getElementById('fps').textContent = data.fps || '-';
+        document.getElementById('processing').textContent = (data.avg_processing_time || 0).toFixed(3) + 'с';
+        document.getElementById('latency').textContent = (data.avg_latency || 0).toFixed(3) + 'с';
+        document.getElementById('total_frames').textContent = data.total_frames || 0;
+    } catch (e) {}
+}
+
+async function updateConfig() {
+    try {
+        const res = await fetch('/config');
+        const data = await res.json();
+        const html = `
+            <p><b>Мин. габариты:</b> ${data.min_dimensions.join(' × ')} мм</p>
+            <p><b>Макс. габариты:</b> ${data.max_dimensions.join(' × ')} мм</p>
+            <p><b>Порог круга:</b> ${data.circle_ratio_threshold}</p>
+            <p><b>Порог низкой уверенности:</b> ${data.confidence_low_threshold}</p>
+            <p><b>Допуск (мм):</b> ${data.tolerance_mm}</p>
+            <p><b>Калибровка:</b> ${data.pixels_per_mm} px/мм</p>
+            <p><b>Скорость конвейера:</b> ${data.conveyor_speed} м/с</p>
+        `;
+        document.getElementById('config-params').innerHTML = html;
+    } catch (e) {}
+}
+
+async function updateHistory() {
+    try {
+        const res = await fetch('/history?limit=20');
+        const data = await res.json();
+        const tbody = document.getElementById('history-body');
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8">Нет данных</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.map(item => {
+            const time = new Date(item.timestamp * 1000).toLocaleTimeString();
+            const catMap = {0: 'Ручной', 1: 'B', 2: 'C', 3: 'D'};
+            const status = item.success ? '✅' : '❌';
+            return `<tr>
+                <td>${time}</td>
+                <td>${catMap[item.category] || item.category}</td>
+                <td>${(item.confidence || 0).toFixed(2)}</td>
+                <td>${(item.width_mm || 0).toFixed(1)}</td>
+                <td>${(item.height_mm || 0).toFixed(1)}</td>
+                <td>${(item.offset_mm || 0).toFixed(1)}</td>
+                <td>${(item.latency || 0).toFixed(3)}</td>
+                <td>${status}</td>
+            </tr>`;
+        }).join('');
+    } catch (e) {}
+}
+
+async function updateStatistics() {
+    try {
+        const res = await fetch('/statistics');
+        const data = await res.json();
+        const labels = ['Ручной (0)', 'B (1)', 'C (2)', 'D (3)'];
+        const values = [data[0] || 0, data[1] || 0, data[2] || 0, data[3] || 0];
+        const colors = ['#ffc107', '#28a745', '#dc3545', '#17a2b8'];
+        if (categoryChart) {
+            categoryChart.data.datasets[0].data = values;
+            categoryChart.update();
+        } else {
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+            categoryChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: colors,
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+    } catch (e) {}
+}
+
+function refreshFrame() {
+    const img = document.getElementById('frame-img');
+    img.src = '/frame?' + new Date().getTime();
+}
+
+async function startPipeline() {
+    try {
+        const res = await fetch('/start', { method: 'POST' });
+        const data = await res.json();
+        alert(data.status);
+    } catch (e) { alert('Ошибка: ' + e.message); }
+}
+
+async function stopPipeline() {
+    try {
+        const res = await fetch('/stop', { method: 'POST' });
+        const data = await res.json();
+        alert(data.status);
+    } catch (e) { alert('Ошибка: ' + e.message); }
+}
+
+function downloadLogs() {
+    window.open('/logs', '_blank');
+}
+
+// Загрузка STL
+document.getElementById('upload-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const resultDiv = document.getElementById('stl-result');
+    const output = document.getElementById('stl-output');
+    resultDiv.style.display = 'block';
+    output.textContent = 'Загрузка и обработка...';
+    try {
+        const res = await fetch('/upload-stl', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (res.ok) {
+            output.textContent = JSON.stringify(data, null, 2);
+        } else {
+            output.textContent = 'Ошибка: ' + (data.detail || data.error || 'Неизвестная ошибка');
+        }
+    } catch (err) {
+        output.textContent = 'Ошибка: ' + err.message;
+    }
+});
+
+// Периодическое обновление
+setInterval(() => {
+    updateStatus();
+    updateMetrics();
+    updateHistory();
+    updateStatistics();
+    refreshFrame();
+}, 2000);
+
+// Также обновляем параметры конфигурации один раз
+updateConfig();
+
+// Первичная загрузка
+updateStatus();
+updateMetrics();
+updateHistory();
+updateStatistics();
+refreshFrame();
+</script>
+</body>
+</html>
